@@ -10,5 +10,5 @@ wget -c "https://pjreddie.com/media/files/darknet53.conv.74" --header "Referer: 
 wget -c "https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights"
 # Download weights for tiny YOLOv4
 wget -c "https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v4_pre/yolov4-tiny.weights"
-# Download weights for YOLOv4 weights
+# Download weights for YOLOv4 backbone
 wget -c "https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.conv.137"
