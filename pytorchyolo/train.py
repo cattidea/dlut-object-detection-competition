@@ -73,6 +73,7 @@ def run():
     parser.add_argument("--iou_thres", type=float, default=0.5, help="Evaluation: IOU threshold required to qualify as detected")
     parser.add_argument("--conf_thres", type=float, default=0.1, help="Evaluation: Object confidence threshold")
     parser.add_argument("--nms_thres", type=float, default=0.5, help="Evaluation: IOU threshold for non-maximum suppression")
+    parser.add_argument("--soft_nms", action="store_true", help="Using Soft NMS")
     parser.add_argument("--logdir", type=str, default="logs", help="Directory for training log files (e.g. for TensorBoard)")
     parser.add_argument("--seed", type=int, default=-1, help="Makes results reproducable. Set -1 to disable.")
     args = parser.parse_args()
@@ -240,6 +241,7 @@ def run():
                 iou_thres=args.iou_thres,
                 conf_thres=args.conf_thres,
                 nms_thres=args.nms_thres,
+                soft_nms=args.soft_nms,
                 verbose=args.verbose
             )
 
