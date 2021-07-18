@@ -292,7 +292,7 @@ def box_iou(box1, box2):
     return inter / (area1[:, None] + area2 - inter)
 
 
-def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=None):
+def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, soft=False, classes=None):
     """Performs Non-Maximum Suppression (NMS) on inference results
     Returns:
          detections with shape: nx6 (x1, y1, x2, y2, conf, cls)
@@ -350,7 +350,13 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         c = x[:, 5:6] * max_wh  # classes
         # boxes (offset by class), scores
         boxes, scores = x[:, :4] + c, x[:, 4]
-        i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
+
+        # NMS
+        if soft:
+            i = soft_nms(boxes, scores, soft_threshold=conf_thres, iou_threshold=iou_thres, weight_method=2, sigma=0.5)
+        else:
+            i = torchvision.ops.nms(boxes, scores, iou_thres)
+
         if i.shape[0] > max_det:  # limit detections
             i = i[:max_det]
 
@@ -361,6 +367,47 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             break  # time limit exceeded
 
     return output
+
+
+def soft_nms(boxes: torch.Tensor, scores: torch.Tensor, soft_threshold=0.01,  iou_threshold=0.7, weight_method=2, sigma=0.5):
+    """
+    :ref: https://github.com/DongPoLI/NMS_SoftNMS/blob/main/soft_nms.py
+    :param boxes: [N, 4]， 此处传进来的框，是经过筛选（选取的得分TopK）之后的
+    :param scores: [N]
+    :param iou_threshold: 0.7
+    :param soft_threshold: soft nms 过滤掉得分太低的框 （手动设置）
+    :param weight_method: 权重方法 1. 线性 2. 高斯
+    :return: 保留的框，与其他框的索引
+    """
+    keep = []
+     # 值从小到大的 索引， 索引对应的 是 元boxs索引 scores索引
+    idxs = scores.argsort()
+    while idxs.numel() > 0:  # 循环直到null； numel()： 数组元素个数
+        # 得分最大框对应的索引, 以及对应的坐标
+        # 由于scores得分会改变，所以每次都要重新排序，获取得分最大值
+        idxs = scores.argsort()  # 评分排序
+
+        if idxs.size(0) == 1:  # 就剩余一个框了；
+            keep.append(idxs[-1])  # 位置不能变
+            break
+        keep_len = len(keep)
+        max_score_index = idxs[-(keep_len + 1)]
+        max_score_box = boxes[max_score_index][None, :]  # [1, 4]
+        idxs = idxs[:-(keep_len + 1)]
+        other_boxes = boxes[idxs]  # [?, 4]
+        keep.append(max_score_index)  # 位置不能边
+        ious = box_iou(max_score_box, other_boxes)  # 一个框和其余框比较 1XM
+        # Soft NMS 处理， 和得分最大框 IOU 大于阈值的框，进行得分抑制
+        if weight_method == 1:   # 线性抑制  # 整个过程 只修改分数
+            ge_threshod_bool = ious[0] >= iou_threshold
+            ge_threshod_idxs = idxs[ge_threshod_bool]
+            scores[ge_threshod_idxs] *= (1. - ious[0][ge_threshod_bool])  # 小于IoU阈值的不变
+        elif weight_method == 2:  # 高斯抑制， 不管大不大于阈值，都计算权重
+            scores[idxs] *= torch.exp(-(ious[0] * ious[0]) / sigma) # 权重(0, 1]
+
+    keep = idxs.new(keep)  # Tensor
+    keep = keep[scores[keep] > soft_threshold]  # 最后处理阈值
+    return keep
 
 
 def print_environment_info():
