@@ -5,12 +5,15 @@ build
 *.egg-info
 dist
 output
+text_output
 data/*
 backup
 weights/*.weights
 weights/*.conv.*
 __pycache__
 checkpoints
+config/cattidea-*
+notebooks
 
 .vscode/
 logs/

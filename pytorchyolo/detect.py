@@ -29,7 +29,7 @@ plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
 
 
-def detect_directory(model_path, weights_path, img_path, classes, output_path,
+def detect_directory(model_path, weights_path, img_path, classes, output_path, text_output_path, text_only=False,
                      batch_size=8, img_size=416, n_cpu=8, conf_thres=0.5, nms_thres=0.5, soft_nms=False):
     """Detects objects on all images in specified directory and saves output images with drawn detections.
 
@@ -66,8 +66,29 @@ def detect_directory(model_path, weights_path, img_path, classes, output_path,
         conf_thres,
         nms_thres,
         soft_nms=soft_nms)
-    _draw_and_save_output_images(
-        img_detections, imgs, img_size, output_path, classes)
+    if not text_only:
+        _draw_and_save_output_images(
+            img_detections, imgs, img_size, output_path, classes)
+    _save_number_of_object_text(img_detections, imgs, text_output_path, classes)
+
+
+def _save_number_of_object_text(img_detections, imgs, output_path, classes):
+    os.makedirs(output_path, exist_ok=True)
+
+    for (image_path, detections) in zip(imgs, img_detections):
+        num_for_each_classes = [0 for _ in range(len(classes))]
+        image_name = os.path.splitext(os.path.basename(image_path))[0]
+        text_path = os.path.join(output_path, image_name + '.txt')
+        for detection in detections:
+            num_for_each_classes[int(detection[5])] += 1
+        with open(text_path, 'w') as f:
+            f.write('START\n')
+            for i in range(len(num_for_each_classes)):
+                if num_for_each_classes[i] == 0:
+                    continue
+                f.write('Goal_ID={};Num={}\n'.format(classes[i].split('-')[0], num_for_each_classes[i]))
+            f.write('END\n')
+
 
 
 def detect_image(model, image, img_size=416, conf_thres=0.5, nms_thres=0.5, soft_nms=False):
@@ -307,12 +328,14 @@ def run():
     parser.add_argument("-i", "--images", type=str, default="data/samples", help="Path to directory with images to inference")
     parser.add_argument("-c", "--classes", type=str, default="data/coco.names", help="Path to classes label file (.names)")
     parser.add_argument("-o", "--output", type=str, default="output", help="Path to output directory")
+    parser.add_argument("-t", "--text_output", type=str, default="text_output", help="Path to text output directory")
     parser.add_argument("-b", "--batch_size", type=int, default=1, help="Size of each image batch")
     parser.add_argument("--img_size", type=int, default=416, help="Size of each image dimension for yolo")
     parser.add_argument("--n_cpu", type=int, default=8, help="Number of cpu threads to use during batch generation")
     parser.add_argument("--conf_thres", type=float, default=0.5, help="Object confidence threshold")
     parser.add_argument("--nms_thres", type=float, default=0.4, help="IOU threshold for non-maximum suppression")
     parser.add_argument("--soft_nms", action="store_true", help="Using Soft NMS")
+    parser.add_argument("--text_only", action="store_true", help="Only output text files")
     args = parser.parse_args()
     print(f"Command line arguments: {args}")
 
@@ -325,6 +348,8 @@ def run():
         args.images,
         classes,
         args.output,
+        args.text_output,
+        args.text_only,
         batch_size=args.batch_size,
         img_size=args.img_size,
         n_cpu=args.n_cpu,
