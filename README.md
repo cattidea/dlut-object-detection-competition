@@ -16,15 +16,6 @@ pip3 install poetry --user
 poetry install
 ```
 
-### Download pretrained weights
-
-```bash
-cd /weights/
-sh ./download_weights.sh
-```
-
-比赛数据集预训练参数将在 release 中提供。
-
 ## Inference
 
 ```bash
@@ -37,8 +28,17 @@ poetry run yolo-detect --images data/samples/
 poetry run yolo-detect --images data/val --model config/cattidea-yolov4.cfg --weights checkpoints/yolo_ckpt_127.pth --classes data/object_detection_dataset_train/classes.names --conf_thres 0.35 --nms_thres 0.7 --soft_nms --multiscale_testing
 ```
 
+比赛推理模型将在 release 中提供。
+
 ## Train
 For argument descriptions have a look at `poetry run yolo-train --help`
+
+### Download pretrained weights
+
+```bash
+cd /weights/
+sh ./download_weights.sh
+```
 
 ### Generate custom model config
 
