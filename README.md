@@ -63,3 +63,4 @@ sh ./create_custom_yolov4_model.sh 49 416 cattidea-yolov4.cfg
 - 整体基于：<https://github.com/eriklindernoren/PyTorch-YOLOv3>
 - 多尺度测试：<https://zhuanlan.zhihu.com/p/266887169>
 - Soft NMS: <https://github.com/DongPoLI/NMS_SoftNMS/blob/main/soft_nms.py>
+- YOLOv4 模型结构及预训练参数：<https://github.com/AlexeyAB/darknet#how-to-train-to-detect-your-custom-objects>
