@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
 from pytorchyolo.models import load_model
-from pytorchyolo.utils.utils import load_classes, rescale_boxes, non_max_suppression, print_environment_info
+from pytorchyolo.utils.utils import load_classes, rescale_boxes, non_max_suppression, print_environment_info, nms
 from pytorchyolo.utils.datasets import ImageFolder
 from pytorchyolo.utils.transforms import Resize, DEFAULT_TRANSFORMS
 
@@ -30,7 +30,7 @@ plt.rcParams['axes.unicode_minus'] = False
 
 
 def detect_directory(model_path, weights_path, img_path, classes, output_path, text_output_path, text_only=False,
-                     batch_size=8, img_size=416, n_cpu=8, conf_thres=0.5, nms_thres=0.5, soft_nms=False):
+                     batch_size=8, img_size=416, n_cpu=8, conf_thres=0.5, nms_thres=0.5, soft_nms=False, multiscale=False):
     """Detects objects on all images in specified directory and saves output images with drawn detections.
 
     :param model_path: Path to model definition file (.cfg)
@@ -58,7 +58,8 @@ def detect_directory(model_path, weights_path, img_path, classes, output_path, t
     """
     dataloader = _create_data_loader(img_path, batch_size, img_size, n_cpu)
     model = load_model(model_path, weights_path)
-    img_detections, imgs = detect(
+    detect_method = detect_multiscale if multiscale else detect
+    img_detections, imgs = detect_method(
         model,
         dataloader,
         output_path,
@@ -126,6 +127,62 @@ def detect_image(model, image, img_size=416, conf_thres=0.5, nms_thres=0.5, soft
     return detections.numpy()
 
 
+def detect_multiscale(model, dataloader, output_path, img_size, conf_thres, nms_thres, soft_nms):
+    """Inferences images with model.
+
+    :param model: Model for inference
+    :type model: models.Darknet
+    :param dataloader: Dataloader provides the batches of images to inference
+    :type dataloader: DataLoader
+    :param output_path: Path to output directory
+    :type output_path: str
+    :param img_size: Size of each image dimension for yolo, defaults to 416
+    :type img_size: int, optional
+    :param conf_thres: Object confidence threshold, defaults to 0.5
+    :type conf_thres: float, optional
+    :param nms_thres: IOU threshold for non-maximum suppression, defaults to 0.5
+    :type nms_thres: float, optional
+    :return: List of detections. The coordinates are given for the padded image that is provided by the dataloader.
+        Use `utils.rescale_boxes` to transform them into the desired input image coordinate system before its transformed by the dataloader),
+        List of input image paths
+    :rtype: [Tensor], [str]
+    """
+
+    # Create output directory, if missing
+    os.makedirs(output_path, exist_ok=True)
+
+    model.eval()  # Set model to evaluation mode
+
+    Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+
+    img_detections = []  # Stores detections for each image index
+    imgs = []  # Stores image paths
+
+    for (img_paths, input_imgs) in tqdm.tqdm(dataloader, desc="Detecting"):
+        # Configure input
+        image = input_imgs[0]
+        detections_multiscale = []
+        for img_size_ in [320, 416, 608]:
+            input_imgs = Resize(img_size_)((image, np.zeros((1, 5))))[0].unsqueeze(0)
+            input_imgs = Variable(input_imgs.type(Tensor))
+
+            # Get detections
+            with torch.no_grad():
+                detections = model(input_imgs)
+                detections = non_max_suppression(detections, conf_thres, nms_thres, soft_nms)[0]
+                detections[:, :4] = detections[:, :4] / img_size_ * img_size
+            detections_multiscale.append(detections)
+        detections_multiscale = torch.cat(detections_multiscale, axis=0)
+
+        detections_multiscale = nms(detections_multiscale, conf_thres * 1.3, nms_thres * 0.7, soft_nms)
+        detections_multiscale = detections_multiscale.unsqueeze(0)
+
+        # Store image and detections
+        img_detections.extend(detections_multiscale)
+        imgs.extend(img_paths)
+    return img_detections, imgs
+
+
 def detect(model, dataloader, output_path, img_size, conf_thres, nms_thres, soft_nms):
     """Inferences images with model.
 
@@ -146,48 +203,6 @@ def detect(model, dataloader, output_path, img_size, conf_thres, nms_thres, soft
         List of input image paths
     :rtype: [Tensor], [str]
     """
-    # max_wh = 4096
-    # max_det = 300  # maximum number of detections per image
-
-    # # Create output directory, if missing
-    # os.makedirs(output_path, exist_ok=True)
-
-    # model.eval()  # Set model to evaluation mode
-
-    # Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-
-    # img_detections = []  # Stores detections for each image index
-    # imgs = []  # Stores image paths
-
-    # for (img_paths, input_imgs) in tqdm.tqdm(dataloader, desc="Detecting"):
-    #     # Configure input
-    #     image = input_imgs[0]
-    #     detections_multiscale = []
-    #     for img_size_ in [320, 416, 608, 832]:
-    #         input_imgs = Resize(img_size_)((image, np.zeros((1, 5))))[0].unsqueeze(0)
-    #         input_imgs = Variable(input_imgs.type(Tensor))
-
-    #         # Get detections
-    #         with torch.no_grad():
-    #             detections = model(input_imgs)
-    #             detections = non_max_suppression(detections, conf_thres, nms_thres, soft_nms)[0]
-    #             detections[:, :4] = detections[:, :4] / img_size_ * img_size
-    #         detections_multiscale.append(detections)
-    #     detections_multiscale = torch.cat(detections_multiscale, axis=0)
-
-    #     c = detections_multiscale[:, 5:6] * max_wh  # classes
-    #     # boxes (offset by class), scores
-    #     boxes, scores = detections_multiscale[:, :4] + c, detections_multiscale[:, 4]
-    #     i = torchvision.ops.nms(boxes, scores, 0.45)  # NMS
-    #     if i.shape[0] > max_det:  # limit detections
-    #         i = i[:max_det]
-
-    #     detections_multiscale = detections_multiscale[i].unsqueeze(0)
-
-    #     # Store image and detections
-    #     img_detections.extend(detections_multiscale)
-    #     imgs.extend(img_paths)
-    # return img_detections, imgs
 
     # Create output directory, if missing
     os.makedirs(output_path, exist_ok=True)
@@ -336,6 +351,7 @@ def run():
     parser.add_argument("--nms_thres", type=float, default=0.4, help="IOU threshold for non-maximum suppression")
     parser.add_argument("--soft_nms", action="store_true", help="Using Soft NMS")
     parser.add_argument("--text_only", action="store_true", help="Only output text files")
+    parser.add_argument("--multiscale_testing", action="store_true", help="Multiscale testing")
     args = parser.parse_args()
     print(f"Command line arguments: {args}")
 
@@ -355,7 +371,8 @@ def run():
         n_cpu=args.n_cpu,
         conf_thres=args.conf_thres,
         nms_thres=args.nms_thres,
-        soft_nms=args.soft_nms)
+        soft_nms=args.soft_nms,
+        multiscale=args.multiscale_testing)
 
 
 if __name__ == '__main__':

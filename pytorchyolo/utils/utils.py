@@ -302,9 +302,6 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, soft=False,
 
     # Settings
     # (pixels) minimum and maximum box width and height
-    max_wh = 4096
-    max_det = 300  # maximum number of detections per image
-    max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 1.0  # seconds to quit after
     multi_label = nc > 1  # multiple labels per box (adds 0.5ms/img)
 
@@ -339,29 +336,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, soft=False,
         if classes is not None:
             x = x[(x[:, 5:6] == torch.tensor(classes, device=x.device)).any(1)]
 
-        # Check shape
-        n = x.shape[0]  # number of boxes
-        if not n:  # no boxes
-            continue
-        elif n > max_nms:  # excess boxes
-            # sort by confidence
-            x = x[x[:, 4].argsort(descending=True)[:max_nms]]
-
-        # Batched NMS
-        c = x[:, 5:6] * max_wh  # classes
-        # boxes (offset by class), scores
-        boxes, scores = x[:, :4] + c, x[:, 4]
-
-        # NMS
-        if soft:
-            i = soft_nms(boxes, scores, soft_threshold=conf_thres, iou_threshold=iou_thres, weight_method=2, sigma=0.5)
-        else:
-            i = torchvision.ops.nms(boxes, scores, iou_thres)
-
-        if i.shape[0] > max_det:  # limit detections
-            i = i[:max_det]
-
-        output[xi] = to_cpu(x[i])
+        output[xi] = to_cpu(nms(x, conf_thres, iou_thres, soft=soft))
 
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
@@ -370,7 +345,45 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, soft=False,
     return output
 
 
-def soft_nms(boxes: torch.Tensor, scores: torch.Tensor, soft_threshold=0.01,  iou_threshold=0.7, weight_method=2, sigma=0.5):
+def nms(detections: torch.Tensor, conf_thres=0.01,  iou_thres=0.7, soft=False):
+    """Performs Non-Maximum Suppression (NMS) on detection results.
+    Args:
+        detections: (tensor) detection boxes with scores, sized [N, 6].
+        coef_thres: (float) threshold for confidence score.
+        iou_thres: (float) threshold for IoU.
+        soft: (bool) whether to perform soft NMS.
+    Returns:
+        (tensor) picked detections.
+    """
+    max_wh = 4096
+    max_det = 300  # maximum number of detections per image
+    max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
+
+    # Check shape
+    n = detections.shape[0]  # number of boxes
+    if not n:  # no boxes
+        return detections
+    elif n > max_nms:  # excess boxes
+        # sort by confidence
+        detections = detections[detections[:, 4].argsort(descending=True)[:max_nms]]
+
+    # Batched NMS
+    c = detections[:, 5:6] * max_wh  # classes
+    # boxes (offset by class), scores
+    boxes, scores = detections[:, :4] + c, detections[:, 4]
+
+    if soft:
+        i = _soft_nms(boxes, scores, soft_threshold=conf_thres, iou_threshold=iou_thres, weight_method=2, sigma=0.5)
+    else:
+        i = torchvision.ops.nms(boxes, scores, iou_thres)
+
+    if i.shape[0] > max_det:  # limit detections
+        i = i[:max_det]
+
+    return detections[i]
+
+
+def _soft_nms(boxes: torch.Tensor, scores: torch.Tensor, soft_threshold=0.01,  iou_threshold=0.7, weight_method=2, sigma=0.5):
     """
     :ref: https://github.com/DongPoLI/NMS_SoftNMS/blob/main/soft_nms.py
     :param boxes: [N, 4]， 此处传进来的框，是经过筛选（选取的得分TopK）之后的
