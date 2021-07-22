@@ -1,11 +1,6 @@
 # DLUT Object Detection Competition
 
 [2021 DLUT 目标识别挑战赛](https://teach.dlut.edu.cn/info/1016/10777.htm)
-
-## Colab
-
-[dlut-object-detection-competition](https://colab.research.google.com/drive/1lW3jsdbdBSZyDF40gcvTFttUSSNQjnrx?usp=sharing)
-
 ## Installation
 ### Installing from source
 
@@ -25,13 +20,24 @@ poetry run yolo-detect --images data/samples/
 还有很多参数，比如下面这样：
 
 ```bash
-poetry run yolo-detect --images data/val --model config/cattidea-yolov4.cfg --weights checkpoints/yolo_ckpt_127.pth --classes data/object_detection_dataset_train/classes.names --conf_thres 0.35 --nms_thres 0.7 --soft_nms --multiscale_testing
+poetry run yolo-detect \
+             --images data/val \
+             --model config/cattidea-yolov4.cfg \
+             --weights checkpoints/yolo_ckpt_127.pth \
+             --classes data/object_detection_dataset_train/classes.names \
+             --conf_thres 0.35 \
+             --nms_thres 0.7 \
+             --soft_nms \
+             --multiscale_testing \
+             --text_only
 ```
 
 比赛推理模型将在 release 中提供。
 
 ## Train
-For argument descriptions have a look at `poetry run yolo-train --help`
+
+建议直接使用 Colab，这里有已经写好的 [Colab Notebook: dlut-object-detection-competition](https://colab.research.google.com/drive/1lW3jsdbdBSZyDF40gcvTFttUSSNQjnrx?usp=sharing)
+
 
 ### Download pretrained weights
 
