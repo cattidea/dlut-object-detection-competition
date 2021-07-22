@@ -1,7 +1,9 @@
 # DLUT Object Detection Competition
 
 [2021 DLUT 目标识别挑战赛](https://teach.dlut.edu.cn/info/1016/10777.htm)
+
 ## Installation
+
 ### Installing from source
 
 ```bash
@@ -32,7 +34,11 @@ poetry run yolo-detect \
              --text_only
 ```
 
-比赛推理模型将在 release 中提供。
+使用 Colab 训练好的推理模型：
+
+   - [GitHub Releases](https://github.com/cattidea/dlut-object-detection-competition/releases/tag/v1.0.0)
+   - [Google Drive](https://drive.google.com/file/d/12GIcunQ7jmeXF1Fot7AWsHm1VggOgaJZ/view?usp=sharing)
+   - [Baidu Netdisk](https://pan.baidu.com/s/1FcYdJIcvYiw51ApiQTtaQg) Extract code: dh9u
 
 ## Train
 
